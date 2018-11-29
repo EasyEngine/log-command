@@ -124,9 +124,7 @@ class LOG_Command extends EE_Command {
 				}
 
 				foreach ( $allowed_types as $type ) {
-					if ( 'access' === $type || 'error' === $type ) {
-						$log_type_path = $logs_path . DIRECTORY_SEPARATOR;
-					} elseif ( 'wp' === $type ) {
+					if ( 'wp' === $type ) {
 						$log_type_path = $wp_logs_path;
 					} else {
 						$log_type_path = $logs_path . DIRECTORY_SEPARATOR . $type;
