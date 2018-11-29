@@ -3,6 +3,7 @@
 use EE\Model\Site;
 use function EE\Site\Utils\auto_site_name;
 use function EE\Site\Utils\get_site_info;
+use EE\Utils as EE_Utils;
 
 /**
  * Perform operations on log files.
@@ -85,13 +86,13 @@ class LOG_Command extends EE_Command {
 
 		$final_string = '';
 
-		$is_global = false;
-		$is_cli    = false;
+		$is_global = EE_Utils\get_flag_value( $assoc_args, 'global', false );
+		$is_cli    = EE_Utils\get_flag_value( $assoc_args, 'cli', false );
 
 		// Possible logs for a site.
 		$allowed_types = [ 'nginx', 'php', 'wp', 'access', 'error' ];
 
-		$lines = empty( $assoc_args['n'] ) ? 10 : $assoc_args['n'];
+		$lines = EE_Utils\get_flag_value( $assoc_args, 'n', 10 );
 
 		$passed_types = array_keys( $assoc_args );
 
@@ -105,14 +106,6 @@ class LOG_Command extends EE_Command {
 			$final_types = $allowed_types;
 		} else {
 			$final_types = array_intersect( $allowed_types, $passed_types );
-		}
-
-		if ( isset( $assoc_args['global'] ) ) {
-			$is_global = true;
-		}
-
-		if ( isset( $assoc_args['cli'] ) ) {
-			$is_cli = true;
 		}
 
 		if ( $is_global ) {
