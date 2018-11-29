@@ -141,6 +141,8 @@ class LOG_Command extends EE_Command {
 
 			$site_type    = $this->site_data->site_type;
 			$logs_path    = $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . 'logs';
+			$nginx_path   = $logs_path . DIRECTORY_SEPARATOR . 'nginx';
+			$php_path     = $logs_path . DIRECTORY_SEPARATOR . 'php';
 			$wp_logs_path = $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . $this->create_directory_path( [ 'app', 'htdocs', 'wp-content' ] );
 
 			if ( 'html' === $site_type ) {
@@ -151,7 +153,10 @@ class LOG_Command extends EE_Command {
 
 			foreach ( $final_types as $type ) {
 				if ( 'access' === $type || 'error' === $type ) {
-					$log_type_path = $logs_path . DIRECTORY_SEPARATOR;
+					if ( 'html' !== $site_type ) {
+						$this->get_files( $php_path . DIRECTORY_SEPARATOR, $type );
+					}
+					$log_type_path = $nginx_path . DIRECTORY_SEPARATOR;
 				} elseif ( 'wp' === $type ) {
 					$log_type_path = $wp_logs_path;
 				} else {
