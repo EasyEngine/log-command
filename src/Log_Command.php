@@ -112,6 +112,9 @@ class LOG_Command extends EE_Command {
 
 			$sites = Site::all();
 
+			// EasyEngine logs
+			$this->get_files( EE_ROOT_DIR . DIRECTORY_SEPARATOR . $this->create_directory_path( [ 'logs' ] ), 'cli' );
+
 			foreach ( $sites as $site ) {
 
 				$logs_path = $site->site_fs_path . DIRECTORY_SEPARATOR . 'logs';
@@ -241,7 +244,7 @@ class LOG_Command extends EE_Command {
 			foreach ( $files as $file ) {
 
 				if ( ! file_exists( $file ) ) {
-					EE::warning( "$type log doesn't exist!!" );
+					EE::warning( "$type log doesn't exist!" );
 					continue;
 				}
 
