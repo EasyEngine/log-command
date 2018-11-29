@@ -9,4 +9,4 @@ if ( file_exists( $autoload ) ) {
 	require_once $autoload;
 }
 
-EE::add_command( 'log', 'Log_Command' );
+EE::add_command( 'log', 'LOG_Command' );
