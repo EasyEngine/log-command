@@ -18,7 +18,7 @@ use EE\Utils as EE_Utils;
  *     watching logfile example.com/logs/php/access.log
  *
  */
-class LOG_Command extends EE_Command {
+class Log_Command extends EE_Command {
 
 
 	/**
