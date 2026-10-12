@@ -84,8 +84,6 @@ class Log_Command extends EE_Command {
 	 */
 	public function show( $args, $assoc_args ) {
 
-		$final_string = '';
-
 		$is_global = EE_Utils\get_flag_value( $assoc_args, 'global', false );
 		$is_cli    = EE_Utils\get_flag_value( $assoc_args, 'cli', false );
 
@@ -93,6 +91,10 @@ class Log_Command extends EE_Command {
 		$allowed_types = [ 'nginx', 'php', 'wp', 'access', 'error' ];
 
 		$lines = EE_Utils\get_flag_value( $assoc_args, 'n', 10 );
+		// tail's own `+N` (start at line N) and `-N` stay allowed.
+		if ( ! ( is_int( $lines ) || is_string( $lines ) ) || ! preg_match( '/^[+-]?[0-9]{1,9}\z/', (string) $lines ) ) {
+			EE::error( sprintf( "Invalid --n value '%s'. It must be a line count from 0 to 999999999, e.g. 10 (or +10 to start at line 10).", is_int( $lines ) || is_string( $lines ) ? $lines : '' ) );
+		}
 
 		$passed_types = array_keys( $assoc_args );
 
@@ -167,26 +169,53 @@ class Log_Command extends EE_Command {
 			}
 		}
 
-		$logs = array_unique( $this->logs );
+		$logs = array_values( array_filter( array_unique( $this->logs ) ) );
 
 		foreach ( $logs as $log ) {
+			// Remove 'WEBROOT' path and display log path from site name.
+			$log_path = str_replace( WEBROOT, '', $log );
 
-			if ( ! empty( $log ) ) {
-				// Remove 'WEBROOT' path and display log path from site name.
-				$log_path = str_replace( WEBROOT, '', $log );
-
-				EE::log( "watching logfile {$log_path}" );
-
-				$final_string .= $log . ' ';
-			}
+			EE::log( "watching logfile {$log_path}" );
 		}
 
-		if ( ! empty( $final_string ) ) {
-			system( "tail -n $lines -f $final_string" );
-		} else {
+		if ( empty( $logs ) ) {
 			EE::error( 'No logs found!' );
 		}
 
+		$this->follow( $lines, $logs );
+	}
+
+	/**
+	 * Follows the given log files with tail, without a shell: file names come from site directories
+	 * that the site's own containers can write to.
+	 *
+	 * @param string|int $lines Validated line count.
+	 * @param array      $logs  Log file paths.
+	 *
+	 * @return void
+	 */
+	private function follow( $lines, $logs ) {
+
+		EE_Utils\check_proc_available( 'log show' );
+
+		$command = array_merge( [ 'tail', '-n', (string) $lines, '-f', '--' ], $logs );
+		EE::debug( 'COMMAND: ' . implode( ' ', array_map( 'escapeshellarg', $command ) ) );
+
+		// proc_open() only takes an argv array (no shell) from PHP 7.4 on.
+		if ( PHP_VERSION_ID < 70400 ) {
+			$command = implode( ' ', array_map( 'escapeshellarg', $command ) );
+		}
+
+		// No descriptors: tail inherits ee's stdio (passing STDOUT clobbers earlier output when it is a file).
+		$process = proc_open( $command, [], $pipes );
+		if ( ! is_resource( $process ) ) {
+			EE::error( 'Unable to run tail.' );
+		}
+
+		$status = proc_close( $process );
+		if ( 0 !== $status ) {
+			EE::error( "tail exited with status {$status}." );
+		}
 	}
 
 	/**
