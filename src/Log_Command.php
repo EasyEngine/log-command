@@ -127,12 +127,14 @@ class Log_Command extends EE_Command {
 
 				foreach ( $allowed_types as $type ) {
 					if ( 'wp' === $type ) {
-						$log_type_path = $wp_logs_path;
-					} else {
-						$log_type_path = $logs_path . DIRECTORY_SEPARATOR . $type;
+						// Only WordPress sites have a debug.log ($wp_logs_path would be another site's).
+						if ( 'wp' === $site->site_type ) {
+							$this->get_files( $wp_logs_path, $type, $site->site_fs_path . DIRECTORY_SEPARATOR . 'app' );
+						}
+						continue;
 					}
 
-					$this->get_files( $log_type_path, $type );
+					$this->get_files( $logs_path . DIRECTORY_SEPARATOR . $type, $type );
 				}
 			}
 		} elseif ( $is_cli ) {
@@ -165,7 +167,7 @@ class Log_Command extends EE_Command {
 					$log_type_path = $logs_path . DIRECTORY_SEPARATOR . $type;
 				}
 
-				$this->get_files( $log_type_path, $type );
+				$this->get_files( $log_type_path, $type, 'wp' === $type ? $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . 'app' : '' );
 			}
 		}
 
@@ -254,16 +256,43 @@ class Log_Command extends EE_Command {
 	}
 
 	/**
+	 * Checks that a log file is a regular file inside $root once links are resolved.
+	 *
+	 * The site's containers can write to its log directories, so a planted link must not make root's tail read a host file.
+	 *
+	 * @param string       $file Log file path.
+	 * @param string|false $root Real path of the directory the file must be in.
+	 *
+	 * @return bool
+	 */
+	private function is_file_inside( $file, $root ) {
+
+		$real = realpath( $file );
+
+		if ( false !== $real && false !== $root && is_file( $real ) && 0 === strpos( $real, rtrim( $root, DIRECTORY_SEPARATOR ) . DIRECTORY_SEPARATOR ) ) {
+			return true;
+		}
+
+		EE::warning( sprintf( 'Skipping %s: it is not a regular file inside the log directory.', str_replace( WEBROOT, '', $file ) ) );
+
+		return false;
+	}
+
+	/**
 	 * Add all valid logs to an internal array to be processed later.
 	 *
 	 * @param string $log_path Path to log file.
 	 * @param string $type     Type of log file to be monitored.
+	 * @param string $root     Directory the logs must resolve into, $log_path if empty.
 	 *
 	 * @return void
 	 */
-	private function get_files( $log_path, $type = '' ) {
+	private function get_files( $log_path, $type = '', $root = '' ) {
 
 		if ( is_dir( $log_path ) ) {
+
+			// EE's own link to the site's volume is trusted, anything below it is not.
+			$root = realpath( '' === $root ? $log_path : $root );
 
 			if ( 'wp' === $type ) {
 				$files = [ $log_path . 'debug.log' ];
@@ -283,11 +312,11 @@ class Log_Command extends EE_Command {
 				$file_info = pathinfo( $file );
 
 				if ( 'log' === $file_info['extension'] ) {
-					if ( 'access' === $type ) {
-						$this->logs[] = ( 'access' === $file_info['filename'] ) ? $file : '';
-					} elseif ( 'error' === $type ) {
-						$this->logs[] = ( 'error' === $file_info['filename'] ) ? $file : '';
-					} else {
+					if ( ( 'access' === $type || 'error' === $type ) && $type !== $file_info['filename'] ) {
+						continue;
+					}
+
+					if ( $this->is_file_inside( $file, $root ) ) {
 						$this->logs[] = $file;
 					}
 				}
