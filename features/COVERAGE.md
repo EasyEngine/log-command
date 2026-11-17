@@ -28,12 +28,12 @@ The package registers one command, `ee log`, with one subcommand, `show` (there 
 | `--nginx` | All `*.log` under `logs/nginx` (recursive) | log-site "--nginx…", "Log files in subdirectories…" |
 | `--php` | All `*.log` under `logs/php` | log-site "--php…" |
 | `--wp` | `app/htdocs/wp-content/debug.log`; warning + "No logs found!" when missing | log-site "--wp without a debug.log…", "--wp follows…" |
-| `--access` | Files named `access.log` in nginx (+ php for non-html) | log-site "--access shows…", "--access only picks files named access.log", "--access and --error on an html site…" |
-| `--error` | Files named `error.log` in nginx (+ php for non-html) | log-site "--error shows…", "--access and --error on an html site…" |
+| `--access` | Files named `access.log` in nginx (+ php for non-html); with `--nginx`/`--php` only that service's | log-site "--access shows…", "--access only picks files named access.log", "--access and --error on an html site…" |
+| `--error` | Files named `error.log` in nginx (+ php for non-html); with `--nginx`/`--php` only that service's | log-site "--error shows…", "--access and --error on an html site…" |
 | `--all` | All five types | log-site "--all on a wp site…" |
-| Combined type flags | Union, de-duplicated (`array_unique`) | log-site "Combined type flags…", "--nginx --php on a php site…" |
+| Combined type flags | Service flags (`--nginx`/`--php`/`--wp`) add up; `--access`/`--error` narrow the nginx and php logs to that kind (`debug.log` has no kind and stays with `--wp`) | log-site "A service flag with --access…", "A service flag with --error…", "--nginx --php on a php site…" |
 | Type the site lacks | "No logs found!", exit 1 | log-site outline "A log type the site does not have…" (html `--php`, html `--wp`, php `--wp`) |
-| html/php sites drop the wp type | Intended by `unset()`, broken (the `unset()` is a no-op) | not covered yet (its scenario comes back with the fix) |
+| html/php sites drop the wp type | html sites follow only nginx logs, php sites no `debug.log` | log-site "A php site does not follow a wp-content/debug.log" |
 | Non-`.log` files and rotated `*.log.1` | Ignored | log-site "Files without a .log extension…" |
 | File without extension | PHP warning (`extension` read without `isset()`) | not covered yet (its scenario comes back with the fix) |
 | `--n` default 10 | `tail -n 10` | log-site "The default line count is 10" |
@@ -67,7 +67,7 @@ The scenarios for the open bugs below assert the fixed behaviour, so they are no
 
 - Fixed (High): `--n` and the file list were interpolated unescaped into `system( "tail -n $lines -f $final_string" )`. `logs/php` is writable by www-data in the php container, so a planted file name like `x$(cmd).log` ran as root on the host when the admin followed the logs. Fixed in EasyEngine/log-command#8.
 - Fixed (Low): `--n` was not validated and tail's exit status was ignored, so invalid values or tail failures exited 0. Fixed in EasyEngine/log-command#8.
-- Open (Low): `unset( $final_types['php'], $final_types['wp'] )` targets string keys of a list, so it is a no-op; html/php sites follow a `wp-content/debug.log` (and an html site would follow `logs/php`).
+- Fixed (Low): `unset( $final_types['php'], $final_types['wp'] )` targeted string keys of a list, so it was a no-op; html/php sites followed a `wp-content/debug.log` (and an html site would follow `logs/php`). The site type now drops those services with `array_diff()`.
 - Fixed (Low): `--global`: `$wp_logs_path` is only set for WP sites, so a non-WP site before the first WP site raises an undefined-variable warning and later ones reuse a stale path. Fixed in EasyEngine/log-command#8.
 - Open (Low): `--global` ignores `--nginx/--php/--wp/--access/--error` (`$final_types` unused), and it also probes nonexistent `logs/access` and `logs/error` directories.
 - Open (Low): help says `--global` includes "all services" and `--all` "service logs", but no service logs (nginx-proxy, local mariadb) are followed. The docblock examples also show wrong paths (`~/easyengine/sites/example.com/logs/debug.log`).
@@ -82,4 +82,4 @@ The scenarios for the open bugs below assert the fixed behaviour, so they are no
 - No `@le`, `@remote` or `@destructive` scenarios: the command needs no public DNS or backups and changes no global state.
 - Sites (prefix `bh-log-command-`, deleted by `@AfterFeature`, which only touches that prefix): `-1` html, `-2` php, `-3` wp, `-4` html (disabled), `-99` guaranteed absent. Sites are created lazily by `Given the site … of type … exists`, so each scenario runs on its own and only the first scenario of a feature pays for creation.
 - Every `ee log show` run is wrapped in `timeout` (own process group, so `tail` dies too); exit 124 means "still following".
-- Estimated runtime: about 12 minutes (site creation ~4 minutes over the three features, WordPress dominating; 52 scenarios at 3–10 s each).
+- Estimated runtime: about 12 minutes (site creation ~4 minutes over the three features, WordPress dominating; 54 scenarios at 3–10 s each).
