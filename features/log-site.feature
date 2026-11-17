@@ -133,13 +133,30 @@ Feature: ee log show for a single site (type filters, line count, following)
       And STDOUT should not contain "bh-other"
       And the command should still be running when the timeout expires
 
-  Scenario: Combined type flags are merged without duplicates
+  Scenario: A service flag with --access shows only that service's access log
     Given the site "bh-log-command-3.test" of type "wp" exists
     When I run "bin/ee log show bh-log-command-3.test --nginx --access" with a timeout of 8 seconds
     Then STDOUT should contain "watching logfile bh-log-command-3.test/logs/nginx/access.log" exactly 1 time
-      And STDOUT should contain "watching logfile bh-log-command-3.test/logs/nginx/error.log" exactly 1 time
-      And STDOUT should contain "watching logfile bh-log-command-3.test/logs/php/access.log" exactly 1 time
-      And STDOUT should contain "watching logfile" exactly 3 times
+      And STDOUT should contain "watching logfile" exactly 1 time
+      And the command should still be running when the timeout expires
+
+  Scenario: A service flag with --error shows only that service's error log
+    Given the site "bh-log-command-3.test" of type "wp" exists
+    When I run "bin/ee log show bh-log-command-3.test --php --error" with a timeout of 8 seconds
+    Then STDOUT should contain "watching logfile bh-log-command-3.test/logs/php/error.log" exactly 1 time
+      And STDOUT should contain "watching logfile" exactly 1 time
+      And the command should still be running when the timeout expires
+
+  Scenario: A php site does not follow a wp-content/debug.log
+    Given the site "bh-log-command-2.test" of type "php" exists
+      And the file "{SITES_DIR}/bh-log-command-2.test/app/htdocs/wp-content/debug.log" contains:
+      """
+      bh-php-debug-marker
+      """
+    When I run "bin/ee log show bh-log-command-2.test" with a timeout of 8 seconds
+    Then STDOUT should contain "watching logfile" exactly 4 times
+      And STDOUT should not contain "debug.log"
+      And STDOUT should not contain "bh-php-debug-marker"
       And the command should still be running when the timeout expires
 
   Scenario: --nginx --php on a php site shows both log directories
