@@ -64,10 +64,10 @@ class Log_Command extends EE_Command {
 	 * : Displays wp debug log for a site.
 	 *
 	 * [--access]
-	 * : Displays nginx & php access logs for a site.
+	 * : Displays nginx & php access logs for a site. With --nginx or --php, only that service's access logs.
 	 *
 	 * [--error]
-	 * : Displays nginx & php error logs for a site.
+	 * : Displays nginx & php error logs for a site. With --nginx or --php, only that service's error logs.
 	 *
 	 * ## EXAMPLES
 	 *
@@ -89,6 +89,8 @@ class Log_Command extends EE_Command {
 
 		// Possible logs for a site.
 		$allowed_types = [ 'nginx', 'php', 'wp', 'access', 'error' ];
+		$service_types = [ 'nginx', 'php', 'wp' ];
+		$kind_types    = [ 'access', 'error' ];
 
 		$lines = EE_Utils\get_flag_value( $assoc_args, 'n', 10 );
 		// tail's own `+N` (start at line N) and `-N` stay allowed.
@@ -102,12 +104,15 @@ class Log_Command extends EE_Command {
 			unset( $passed_types[ $key ] ); // Remove line count.
 		}
 
-		if ( empty( $passed_types ) ) {
-			$final_types = [ 'nginx', 'php', 'wp' ];
-		} elseif ( in_array( 'all', $passed_types ) ) {
-			$final_types = $allowed_types;
-		} else {
-			$final_types = array_intersect( $allowed_types, $passed_types );
+		// Service flags pick the logs, --access/--error narrow nginx and php logs down to that kind.
+		$services = $service_types;
+		$kinds    = [];
+		if ( ! empty( $passed_types ) && ! in_array( 'all', $passed_types ) ) {
+			$services = array_intersect( $service_types, $passed_types );
+			$kinds    = array_values( array_intersect( $kind_types, $passed_types ) );
+			if ( empty( $services ) ) {
+				$services = [ 'nginx', 'php' ];
+			}
 		}
 
 		if ( $is_global ) {
@@ -150,24 +155,24 @@ class Log_Command extends EE_Command {
 			$wp_logs_path = $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . $this->create_directory_path( [ 'app', 'htdocs', 'wp-content' ] );
 
 			if ( 'html' === $site_type ) {
-				unset( $final_types['php'], $final_types['wp'] );
+				$services = array_diff( $services, [ 'php', 'wp' ] );
 			} elseif ( 'php' === $site_type ) {
-				unset( $final_types['wp'] );
+				$services = array_diff( $services, [ 'wp' ] );
 			}
 
-			foreach ( $final_types as $type ) {
-				if ( 'access' === $type || 'error' === $type ) {
-					if ( 'html' !== $site_type ) {
-						$this->get_files( $php_path . DIRECTORY_SEPARATOR, $type );
-					}
-					$log_type_path = $nginx_path . DIRECTORY_SEPARATOR;
-				} elseif ( 'wp' === $type ) {
-					$log_type_path = $wp_logs_path;
-				} else {
-					$log_type_path = $logs_path . DIRECTORY_SEPARATOR . $type;
+			foreach ( $services as $service ) {
+				if ( 'wp' === $service ) {
+					$this->get_files( $wp_logs_path, 'wp', $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . 'app' );
+					continue;
 				}
 
-				$this->get_files( $log_type_path, $type, 'wp' === $type ? $this->site_data->site_fs_path . DIRECTORY_SEPARATOR . 'app' : '' );
+				$service_path = 'nginx' === $service ? $nginx_path : $php_path;
+				if ( empty( $kinds ) ) {
+					$this->get_files( $service_path, $service );
+				}
+				foreach ( $kinds as $kind ) {
+					$this->get_files( $service_path . DIRECTORY_SEPARATOR, $kind );
+				}
 			}
 		}
 
